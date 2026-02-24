@@ -188,7 +188,7 @@ const AdminHeader = ({
                 onClick={() => setIsProfileDropdownOpen(false)}
               >
                 <FiUser className="text-sm" />
-                <span>My Profile</span>
+                <span><Link to="admin/profile">My Profile</Link></span>
               </Link>
               <Link
                 to="/admin/settings"
