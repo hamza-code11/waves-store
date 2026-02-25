@@ -1,20 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
 import { FiUser, FiMail, FiLock, FiEye, FiEyeOff, FiUserPlus } from "react-icons/fi";
 import Navbar from "../../components/home/Navbar";
 import Footer from "../../components/home/Footer";
 import ShopBanner from "../../components/banner/Banner";
 
 const Register = () => {
+  const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [apiError, setApiError] = useState("");
   const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
+    name: "", // firstName + lastName combined
     email: "",
     password: "",
-    confirmPassword: "",
+    password_confirmation: "",
     agreeTerms: false,
   });
   const [passwordError, setPasswordError] = useState("");
@@ -38,28 +41,94 @@ const Register = () => {
     }));
 
     // Clear password error when typing
-    if (name === 'password' || name === 'confirmPassword') {
+    if (name === 'password' || name === 'password_confirmation') {
       setPasswordError("");
     }
+    // Clear API error when user types
+    setApiError("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Validate passwords match
-    if (formData.password !== formData.confirmPassword) {
+    if (formData.password !== formData.password_confirmation) {
       setPasswordError("Passwords do not match");
       return;
     }
 
-    // Validate password strength (optional)
+    // Validate password strength
     if (formData.password.length < 6) {
       setPasswordError("Password must be at least 6 characters");
       return;
     }
 
-    console.log("Registration attempt:", formData);
-    // Add your registration logic here
+    // Validate terms agreement
+    if (!formData.agreeTerms) {
+      setApiError("You must agree to the Terms of Service and Privacy Policy");
+      return;
+    }
+
+    setLoading(true);
+    setApiError("");
+
+    try {
+      // API call to register
+      const response = await axios.post('http://localhost:8000/api/register', {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        password_confirmation: formData.password_confirmation,
+      });
+
+      console.log("Registration successful:", response.data);
+
+      // Store token in localStorage if returned
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+
+      // Show success message (optional)
+      alert("Registration successful! Welcome to WAPO.");
+      
+      // Redirect to home page after successful registration
+      navigate('/');
+
+    } catch (error) {
+      console.error("Registration error:", error);
+      
+      // Handle different error responses
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        if (error.response.data.errors) {
+          // Handle validation errors
+          const errors = error.response.data.errors;
+          if (errors.email) {
+            setApiError(errors.email[0]);
+          } else if (errors.password) {
+            setApiError(errors.password[0]);
+          } else if (errors.name) {
+            setApiError(errors.name[0]);
+          } else {
+            setApiError("Validation failed. Please check your inputs.");
+          }
+        } else if (error.response.data.message) {
+          setApiError(error.response.data.message);
+        } else {
+          setApiError("Registration failed. Please try again.");
+        }
+      } else if (error.request) {
+        // The request was made but no response was received
+        setApiError("No response from server. Please check your connection.");
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        setApiError("An error occurred. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -99,63 +168,41 @@ const Register = () => {
               </p>
             </div>
 
+            {/* API Error Message */}
+            {apiError && (
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+                {apiError}
+              </div>
+            )}
+
             {/* Register Form */}
             <form onSubmit={handleSubmit} className="space-y-5">
               
-              {/* Name Fields */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={`block text-sm font-medium mb-1.5 ${
-                    isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    First Name
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FiUser className={`text-base ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
-                    </div>
-                    <input
-                      type="text"
-                      name="firstName"
-                      value={formData.firstName}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="John"
-                      className={`w-full pl-10 pr-4 py-3 rounded-lg border text-sm
-                               focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all
-                               ${isDarkMode
-                                 ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                               }`}
-                    />
+              {/* Full Name Field - Replaces firstname and lastname */}
+              <div>
+                <label className={`block text-sm font-medium mb-1.5 ${
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <FiUser className={`text-base ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
                   </div>
-                </div>
-
-                <div>
-                  <label className={`block text-sm font-medium mb-1.5 ${
-                    isDarkMode ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    Last Name
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FiUser className={`text-base ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
-                    </div>
-                    <input
-                      type="text"
-                      name="lastName"
-                      value={formData.lastName}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="Doe"
-                      className={`w-full pl-10 pr-4 py-3 rounded-lg border text-sm
-                               focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all
-                               ${isDarkMode
-                                 ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                                 : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
-                               }`}
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="John Doe"
+                    className={`w-full pl-10 pr-4 py-3 rounded-lg border text-sm
+                             focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all
+                             ${isDarkMode
+                               ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                               : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                             }`}
+                  />
                 </div>
               </div>
 
@@ -239,8 +286,8 @@ const Register = () => {
                   </div>
                   <input
                     type={showConfirmPassword ? "text" : "password"}
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
+                    name="password_confirmation"
+                    value={formData.password_confirmation}
                     onChange={handleInputChange}
                     required
                     placeholder="••••••••"
@@ -295,14 +342,28 @@ const Register = () => {
               {/* Register Button */}
               <button
                 type="submit"
-                className="w-full mt-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 
+                disabled={loading}
+                className={`w-full mt-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 
                          text-white font-medium rounded-lg hover:from-blue-700 
                          hover:to-cyan-700 transition-all duration-300 transform 
                          hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-600/30
-                         flex items-center justify-center gap-2"
+                         flex items-center justify-center gap-2
+                         ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
-                <FiUserPlus className="text-lg" />
-                <span>Create Account</span>
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Creating Account...</span>
+                  </>
+                ) : (
+                  <>
+                    <FiUserPlus className="text-lg" />
+                    <span>Create Account</span>
+                  </>
+                )}
               </button>
             </form>
 

@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { 
   FiMenu, FiSun, FiMoon, FiSearch, FiChevronDown, 
   FiUser, FiSettings, FiLogOut, FiX
 } from "react-icons/fi";
 import { useLocation } from "react-router-dom";
+import axios from "axios";
 
 const AdminHeader = ({ 
   isDarkMode, 
@@ -14,8 +15,10 @@ const AdminHeader = ({
   isMobileMenuOpen, 
   toggleMobileMenu 
 }) => {
+  const navigate = useNavigate();
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
   const profileDropdownRef = useRef(null);
   const location = useLocation();
 
@@ -50,10 +53,57 @@ const AdminHeader = ({
     setIsProfileDropdownOpen(!isProfileDropdownOpen);
   };
 
+  const handleLogout = async () => {
+    setLogoutLoading(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (token) {
+        // Call logout API
+        await axios.post('http://localhost:8000/api/logout', {}, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Even if API fails, we'll still clear local storage
+    } finally {
+      // Clear localStorage regardless of API response
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Close dropdown
+      setIsProfileDropdownOpen(false);
+      setLogoutLoading(false);
+      
+      // Redirect to home page
+      navigate('/');
+      
+      // Optional: Show success message
+      console.log('Logged out successfully');
+    }
+  };
+
   const getPageTitle = () => {
     const currentItem = menuItems.find(item => item.path === location.pathname);
     return currentItem?.name || 'Dashboard';
   };
+
+  // Get user data from localStorage
+  const getUserData = () => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      return JSON.parse(userData);
+    }
+    return { name: 'Admin User', email: 'admin@wapo.com', role: 'Super Admin' };
+  };
+
+  const user = getUserData();
 
   return (
     <header className={`sticky top-0 z-20 w-full h-14 sm:h-16 flex items-center justify-between px-3 sm:px-4 md:px-6 border-b ${
@@ -159,11 +209,15 @@ const AdminHeader = ({
             className="flex items-center gap-1 sm:gap-2 focus:outline-none"
           >
             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xs sm:text-sm">
-              A
+              {user.name ? user.name.charAt(0).toUpperCase() : 'A'}
             </div>
             <div className="hidden sm:block text-xs sm:text-sm text-left">
-              <p className={`font-medium truncate max-w-[80px] ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Admin</p>
-              <p className={`text-xs truncate max-w-[80px] ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Super Admin</p>
+              <p className={`font-medium truncate max-w-[80px] ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                {user.name?.split(' ')[0] || 'Admin'}
+              </p>
+              <p className={`text-xs truncate max-w-[80px] ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                {user.role || 'Admin'}
+              </p>
             </div>
             <FiChevronDown 
               className={`hidden sm:block text-xs transition-transform duration-300 ${
@@ -174,39 +228,62 @@ const AdminHeader = ({
 
           {/* Dropdown Menu */}
           {isProfileDropdownOpen && (
-            <div className={`absolute right-0 mt-2 w-48 rounded-lg shadow-xl border overflow-hidden z-50 ${
+            <div className={`absolute right-0 mt-2 w-56 rounded-lg shadow-xl border overflow-hidden z-50 ${
               isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
             }`}>
               <div className={`p-3 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                <p className={`text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Admin User</p>
-                <p className={`text-xs truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>admin@wapo.com</p>
+                <p className={`text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {user.name || 'Admin User'}
+                </p>
+                <p className={`text-xs truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {user.email || 'admin@wapo.com'}
+                </p>
               </div>
+              
               <Link
                 to="/admin/profile"
-                className={`flex items-center gap-2 px-4 py-3 text-sm transition-colors
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm transition-colors
                   ${isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
                 onClick={() => setIsProfileDropdownOpen(false)}
               >
                 <FiUser className="text-sm" />
-                <span><Link to="admin/profile">My Profile</Link></span>
+                <span>My Profile</span>
               </Link>
+              
               <Link
                 to="/admin/settings"
-                className={`flex items-center gap-2 px-4 py-3 text-sm transition-colors
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm transition-colors
                   ${isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
                 onClick={() => setIsProfileDropdownOpen(false)}
               >
                 <FiSettings className="text-sm" />
                 <span>Settings</span>
               </Link>
+              
               <div className={`border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                 <button
-                  className={`w-full flex items-center gap-2 px-4 py-3 text-sm transition-colors text-left
-                    ${isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
-                  onClick={() => setIsProfileDropdownOpen(false)}
+                  onClick={handleLogout}
+                  disabled={logoutLoading}
+                  className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors text-left
+                    ${isDarkMode 
+                      ? 'text-red-400 hover:bg-gray-700 disabled:opacity-50' 
+                      : 'text-red-600 hover:bg-gray-100 disabled:opacity-50'
+                    }`}
                 >
-                  <FiLogOut className="text-sm" />
-                  <span>Logout</span>
+                  {logoutLoading ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Logging out...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiLogOut className="text-sm" />
+                      <span>Logout</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
 import { FiMail, FiLock, FiLogIn, FiEye, FiEyeOff } from "react-icons/fi";
 import Navbar from "../../components/home/Navbar";
 import Footer from "../../components/home/Footer";
 import ShopBanner from "../../components/banner/Banner";
 
 const SignIn = () => {
+  const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [apiError, setApiError] = useState("");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -25,18 +29,99 @@ const SignIn = () => {
     return () => observer.disconnect();
   }, []);
 
+  // Check if user is already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    
+    if (token && user) {
+      // Redirect based on role
+      if (user.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
+    }
+  }, [navigate]);
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+    // Clear API error when user types
+    setApiError("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Login attempt:", formData);
-    // Add your login logic here
+    
+    setLoading(true);
+    setApiError("");
+
+    try {
+      // API call to login
+      const response = await axios.post('http://localhost:8000/api/login', {
+        email: formData.email,
+        password: formData.password,
+      });
+
+      console.log("Login successful:", response.data);
+
+      // Store token and user data in localStorage
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        
+        // Set axios default header for future requests
+        axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+      }
+
+      // Role-based redirection
+      const userRole = response.data.user?.role || 'user';
+      
+      if (userRole === 'admin') {
+        // Redirect to admin panel
+        navigate('/admin');
+      } else {
+        // Redirect to home page for regular users
+        navigate('/');
+      }
+
+    } catch (error) {
+      console.error("Login error:", error);
+      
+      // Handle different error responses
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        if (error.response.status === 401) {
+          setApiError("Invalid email or password");
+        } else if (error.response.data.message) {
+          setApiError(error.response.data.message);
+        } else if (error.response.data.errors) {
+          // Handle validation errors
+          const errors = error.response.data.errors;
+          if (errors.email) {
+            setApiError(errors.email[0]);
+          } else if (errors.password) {
+            setApiError(errors.password[0]);
+          } else {
+            setApiError("Login failed. Please check your inputs.");
+          }
+        } else {
+          setApiError("Login failed. Please try again.");
+        }
+      } else if (error.request) {
+        // The request was made but no response was received
+        setApiError("No response from server. Please check your connection.");
+      } else {
+        // Something happened in setting up the request
+        setApiError("An error occurred. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,6 +159,13 @@ const SignIn = () => {
                 Welcome back! Please login to your account.
               </p>
             </div>
+
+            {/* API Error Message */}
+            {apiError && (
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+                {apiError}
+              </div>
+            )}
 
             {/* Login Form */}
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -160,27 +252,41 @@ const SignIn = () => {
                   </span>
                 </label>
                 
-                <Link 
+                {/* <Link 
                   to="/forgot-password" 
                   className={`text-sm hover:text-blue-600 transition-colors ${
                     isDarkMode ? 'text-gray-400' : 'text-gray-500'
                   }`}
                 >
                   Lost your password?
-                </Link>
+                </Link> */}
               </div>
 
               {/* Login Button */}
               <button
                 type="submit"
-                className="w-full mt-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 
+                disabled={loading}
+                className={`w-full mt-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 
                          text-white font-medium rounded-lg hover:from-blue-700 
                          hover:to-cyan-700 transition-all duration-300 transform 
                          hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-600/30
-                         flex items-center justify-center gap-2"
+                         flex items-center justify-center gap-2
+                         ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
-                <FiLogIn className="text-lg" />
-                <span>Log in</span>
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Logging in...</span>
+                  </>
+                ) : (
+                  <>
+                    <FiLogIn className="text-lg" />
+                    <span>Log in</span>
+                  </>
+                )}
               </button>
             </form>
 
@@ -203,6 +309,7 @@ const SignIn = () => {
             isDarkMode ? 'bg-gray-800/50 text-gray-400' : 'bg-gray-50 text-gray-500'
           }`}>
             <p>Demo: demo@example.com / password</p>
+            <p className="mt-1">Admin: admin@example.com / admin123</p>
           </div>
         </div>
       </div>
