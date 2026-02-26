@@ -51,6 +51,8 @@ import HomeCMS from "./pages/admin/cms/HomeCMS";
 import FooterCMS from "./pages/admin/cms/FooterCMS";
 import NavbarCMS from "./pages/admin/cms/NavbarCMS.jsx";
 
+import GoogleCallback from "./pages/web/GoogleCallback";
+
 
 const App = () => {
   return (
@@ -64,6 +66,7 @@ const App = () => {
       <Route path="/signin" element={<SignIn />} />
       <Route path="/register" element={<Register />} />
       <Route path="/about" element={<About />} />
+      <Route path="/auth/google/callback" element={<GoogleCallback />} />
 
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<AdminDashboard />} />
@@ -107,6 +110,7 @@ const App = () => {
         <Route path="cms/home" element={<HomeCMS />} />
         <Route path="cms/footer" element={<FooterCMS />} />
         <Route path="cms/navbar" element={<NavbarCMS />} />
+
 
 
       </Route>

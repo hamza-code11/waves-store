@@ -17,8 +17,8 @@ import {
 } from "react-icons/fi";
 import { GiCigarette } from "react-icons/gi";
 
-// Import logo image
-import logo from "../../assets/logo/Untitled design.svg"; // Make sure this path is correct
+// Import logo image as fallback
+import defaultLogo from "../../assets/logo/Untitled design.svg";
 
 function Navbar() {
   const navigate = useNavigate();
@@ -36,14 +36,62 @@ function Navbar() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
-  // User state
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState(null);
-  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const [logoutLoading, setLogoutLoading] = useState(false);
+  // Backend states - Initialize from localStorage
+  const [logo, setLogo] = useState(() => {
+    // Try to get logo from localStorage first
+    const cachedLogo = localStorage.getItem('siteLogo');
+    return cachedLogo || null;
+  });
+  const [logoLoading, setLogoLoading] = useState(!localStorage.getItem('siteLogo')); // Only show loading if no cache
   const [logoError, setLogoError] = useState(false);
 
+  // User state
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return !!localStorage.getItem('token');
+  });
+  const [user, setUser] = useState(() => {
+    const userData = localStorage.getItem('user');
+    return userData ? JSON.parse(userData) : null;
+  });
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
+
   const menuRef = useRef(null);
+  const logoFetchAttempted = useRef(false);
+
+  // Fetch logo from backend only once and cache it
+  useEffect(() => {
+    const fetchLogo = async () => {
+      // Don't fetch if we already have a cached logo or already attempted
+      if (localStorage.getItem('siteLogo') || logoFetchAttempted.current) {
+        setLogoLoading(false);
+        return;
+      }
+
+      try {
+        logoFetchAttempted.current = true;
+        setLogoLoading(true);
+        const response = await axios.get("http://127.0.0.1:8000/api/navbar-setting");
+        
+        if (response.data.logo_image) {
+          const logoUrl = `http://127.0.0.1:8000/${response.data.logo_image}`;
+          setLogo(logoUrl);
+          // Cache in localStorage
+          localStorage.setItem('siteLogo', logoUrl);
+          setLogoError(false);
+        } else {
+          setLogoError(true);
+        }
+      } catch (error) {
+        console.error("Error fetching logo:", error);
+        setLogoError(true);
+      } finally {
+        setLogoLoading(false);
+      }
+    };
+
+    fetchLogo();
+  }, []);
 
   // Check login status on mount and when localStorage changes
   useEffect(() => {
@@ -126,6 +174,18 @@ function Navbar() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
+  // Close dropdown when clicking outside (desktop)
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.dropdown-container')) {
+        setOpenDropdown(null);
+        setOpenSubDropdown(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
   };
@@ -148,9 +208,8 @@ function Navbar() {
       }
     } catch (error) {
       console.error('Logout error:', error);
-      // Even if API fails, we'll still clear local storage
     } finally {
-      // Clear localStorage regardless of API response
+      // Clear localStorage
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       
@@ -165,9 +224,6 @@ function Navbar() {
       
       // Close mobile menu if open
       setIsOpen(false);
-      
-      // Optional: Show success message
-      console.log('Logged out successfully');
     }
   };
 
@@ -176,10 +232,8 @@ function Navbar() {
     
     // Role-based redirection
     if (user?.role === 'admin') {
-      // Admin goes to /admin
       navigate('/admin');
     } else {
-      // Regular user goes to my-account
       navigate('/my-account');
     }
   };
@@ -256,23 +310,15 @@ function Navbar() {
     }
   };
 
-  // Close dropdown when clicking outside (desktop)
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!event.target.closest('.dropdown-container')) {
-        setOpenDropdown(null);
-        setOpenSubDropdown(null);
-      }
-    };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, []);
-
   // Get user initials for avatar
   const getUserInitials = () => {
     if (!user?.name) return 'U';
     return user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
+
+  // Determine logo source
+  const logoSrc = logo && !logoError ? logo : defaultLogo;
+  const showFallbackText = (!logo || logoError) && !logoLoading;
 
   return (
     <nav className={`sticky top-0 z-50 transition-all duration-500 ${scrolled
@@ -286,21 +332,25 @@ function Navbar() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16 sm:h-20">
 
-          {/* Logo - Image instead of text */}
+          {/* Logo - Show immediately from cache or fallback */}
           <Link to="/" className="flex items-center">
-            {logoError ? (
-              // Fallback text logo if image fails to load
+            {showFallbackText ? (
+              // Fallback text logo if no image available
               <span className={`text-xl sm:text-2xl font-bold ${
                 isDarkMode ? 'text-blue-400' : 'text-blue-600'
               }`}>
-                WAPO
+                UNIQUE OUTLET
               </span>
             ) : (
               <img 
-                src={logo} 
-                alt="WAPO Logo" 
+                src={logoSrc} 
+                alt="Website Logo" 
                 className="h-38 sm:h-42 w-auto object-contain"
-                onError={() => setLogoError(true)}
+                onError={() => {
+                  setLogoError(true);
+                  // Remove from cache if error
+                  localStorage.removeItem('siteLogo');
+                }}
                 loading="eager"
               />
             )}
